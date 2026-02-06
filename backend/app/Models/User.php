@@ -19,6 +19,21 @@ class User extends Authenticatable
      */
         protected $guarded = [];
 
+        public function isAdmin()
+        {
+            return $this->role === 'admin';
+        }
+
+        public function isLandlord()
+        {
+            return $this->role === 'landlord';
+        }
+
+        public function isTenant()
+        {
+            return $this->role === 'tenant';
+        }
+
         public function landlord()
         {
             return $this->belongsTo(Landlord::class);

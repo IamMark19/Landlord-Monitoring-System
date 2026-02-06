@@ -13,10 +13,13 @@ class PropertyController extends Controller
      */
     public function index(Request $request)
     {
-        if($request->has('landlord_id')) {
-            return Property::where('landlord_id', $request->landlord_id)->get();
+        $user = auth()->user();
+
+        if ($user->role === 'admin') {
+            return Property::all();
         }
-        return Property::all();
+
+        return Property::where('landlord_id', $user->landlord_id)->get();
     }
 
     /**
@@ -32,12 +35,14 @@ class PropertyController extends Controller
      */
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'landlord_id' => 'required|exists:landlords,id',
-            'name' => 'required|string',
-            'address' => 'required|string',
+       $data = $request->validate([
+        'name' => 'required|string',
+        'address' => 'required|string'
         ]);
-        return Property::create($validated);
+
+        $data['landlord_id'] = auth()->user()->landlord_id;
+        
+        return Property::create($data); 
     }
 
     /**
@@ -45,6 +50,12 @@ class PropertyController extends Controller
      */
     public function show(Property $property)
     {
+        $user = auth()->user();
+
+        if ($user->role !== 'admin' && $property->landlord_id !== $user->landlord_id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
         return $property;
     }
 

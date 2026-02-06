@@ -13,11 +13,15 @@ class TenantController extends Controller
      */
     public function index(Request $request)
     {
-        if ($request->has('unit_id')) {
-            return Tenant::where('unit_id', $request->unit_id)->get();
+        $user = auth()->user();
+
+        if ($user->role === 'admin') {
+            return Tenant::all();
         }
 
-        return Tenant::all();
+        return Tenant::whereHas('unit.property', function ($q) use ($user) {
+            $q->where('landlord_id', $user->landlord_id);
+        })->get();
     }
 
     /**

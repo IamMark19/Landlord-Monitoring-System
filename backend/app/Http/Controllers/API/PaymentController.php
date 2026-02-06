@@ -13,12 +13,23 @@ class PaymentController extends Controller
      */
      public function index(Request $request)
     {
-        if ($request->has('tenant_id')) {
-            return Payment::where('tenant_id', $request->tenant_id)->get();
+        $user = auth()->user();
+
+        if ($user->role === 'admin') {
+            return Payment::all();
         }
 
-        return Payment::all();
-    }
+        if ($user->role === 'tenant') {
+            return Payment::whereHas('tenant', function ($q) use ($user) {
+                $q->where('user_id', $user->id);
+            })->get();
+        }
+
+        // landlord → only payments of their tenants
+        return Payment::whereHas('tenant.unit.property', function ($q) use ($user) {
+            $q->where('landlord_id', $user->landlord_id);
+        })->get();
+        }
 
     /**
      * Show the form for creating a new resource.

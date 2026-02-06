@@ -15,18 +15,31 @@ class AuthController extends Controller
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users',
-            'password' => 'required|min:6'
+            'password' => 'required|min:6',
+            'role' => 'required|in:admin,landlord,tenant'
         ]);
 
         if ($validator->fails()) {
             return response()->json($validator->errors(), 422);
         }
 
+        // Create user with role
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
+            'role' => $request->role
         ]);
+
+        /*
+        |--------------------------------
+        | Auto create landlord profile
+        |--------------------------------
+        */
+        if ($user->role === 'landlord') {
+            $landlord = \App\Models\Landlord::create([]);
+            $user->update(['landlord_id' => $landlord->id]);
+        }
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
