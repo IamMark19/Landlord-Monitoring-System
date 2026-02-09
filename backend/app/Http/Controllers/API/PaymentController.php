@@ -13,23 +13,25 @@ class PaymentController extends Controller
      */
      public function index(Request $request)
     {
-        $user = auth()->user();
+        $user = $request->user();
 
         if ($user->role === 'admin') {
-            return Payment::all();
+            return Payment::with(['tenant', 'unit'])->latest()->get();
         }
 
         if ($user->role === 'tenant') {
-            return Payment::whereHas('tenant', function ($q) use ($user) {
-                $q->where('user_id', $user->id);
-            })->get();
+            return Payment::with('unit')
+                ->where('tenant_id', $user->tenant->id)
+                ->latest()
+                ->get();
         }
 
-        // landlord → only payments of their tenants
-        return Payment::whereHas('tenant.unit.property', function ($q) use ($user) {
-            $q->where('landlord_id', $user->landlord_id);
-        })->get();
-        }
+         // landlord → only payments of their tenants
+        return Payment::with(['tenant', 'unit'])
+            ->whereHas('unit.property', function ($q) use ($user) {
+                $q->where('landlord_id', $user->landlord_id);
+            })->latest()->get();
+    }
 
     /**
      * Show the form for creating a new resource.
@@ -46,10 +48,13 @@ class PaymentController extends Controller
     {
         $validated = $request->validate([
             'tenant_id' => 'required|exists:tenants,id',
-            'amount' => 'required|numeric',
-            'payment_date' => 'required|date',
-            'status' => 'sometimes|in:paid,pending',
+            'unit_id' => 'required|exists:units,id',
+            'amount_due' => 'required|numeric',
+            'due_date' => 'required|date',
         ]);
+
+        $validated['amount_paid'] = 0;
+        $validated['status'] = 'unpaid';
 
         return response()->json(Payment::create($validated), 201);
     }
@@ -59,7 +64,11 @@ class PaymentController extends Controller
      */
     public function show(Payment $payment)
     {
-        return $payment->load('tenant');
+        $payment->load(['tenant', 'unit']);
+        $payment->balance = $payment->amount_due - $payment->amount_paid;
+        $payment->is_overdue = $payment->status !== 'paid' && now()->gt($payment->due_date);
+
+        return response()->json($payment);
     }
 
     /**
@@ -76,13 +85,26 @@ class PaymentController extends Controller
     public function update(Request $request, Payment $payment)
     {
         $validated = $request->validate([
-            'tenant_id' => 'sometimes|exists:tenants,id',
-            'amount' => 'sometimes|numeric',
-            'payment_date' => 'sometimes|date',
-            'status' => 'sometimes|in:paid,pending',
+            'amount_paid' => 'required|numeric|min:0'
         ]);
 
-        $payment->update($validated);
+        // Add payment
+        $payment->amount_paid += $validated['amount_paid'];
+
+        // Auto update status
+        if ($payment->amount_paid >= $payment->amount_due) {
+            $payment->status = 'paid';
+        } elseif ($payment->amount_paid > 0) {
+            $payment->status = 'partial';
+        } else {
+            $payment->status = 'unpaid';
+        }
+
+        $payment->save();
+
+        $payment->balance = $payment->amount_due - $payment->amount_paid;
+        $payment->is_overdue = $payment->status !== 'paid' && now()->gt($payment->due_date);
+
         return response()->json($payment);
     }
 

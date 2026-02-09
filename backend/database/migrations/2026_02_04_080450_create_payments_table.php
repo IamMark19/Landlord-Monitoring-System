@@ -15,9 +15,10 @@ return new class extends Migration
             $table->id();
            $table->foreignId('tenant_id')->constrained(); 
            $table->foreignId('unit_id')->constrained();
-            $table->decimal('amount', 10, 2);
-            $table->date('payment_date');
-            $table->enum('status', ['paid', 'unpaid', 'late']);
+            $table->decimal('amount_due', 10, 2);
+           $table->decimal('amount_paid', 10, 2)->default(0);
+            $table->date('due_date');
+             $table->enum('status', ['unpaid', 'partial', 'paid'])->default('unpaid');
             $table->timestamps();
         });
     }
